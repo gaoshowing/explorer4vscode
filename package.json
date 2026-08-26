@@ -1,0 +1,109 @@
+{
+  "name": "custom-resource-explorer",
+  "displayName": "Custom Resource Explorer",
+  "description": "A VS Code-style workspace resource manager.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:customResourceExplorer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "customResourceExplorer",
+          "name": "PROJECT",
+          "contextualTitle": "PROJECT",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "customResourceExplorer.refresh",
+        "title": "资源管理器：刷新",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "customResourceExplorer.newFile",
+        "title": "资源管理器：新建文件",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "customResourceExplorer.newFolder",
+        "title": "资源管理器：新建文件夹",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "customResourceExplorer.refreshLanguageRoots",
+        "title": "PROJECT：刷新语言源目录"
+      },
+      {
+        "command": "customResourceExplorer.showLanguageRootLog",
+        "title": "PROJECT：显示语言源目录日志"
+      }
+    ],
+    "configuration": {
+      "title": "自定义资源管理器",
+      "properties": {
+        "customResourceExplorer.showHiddenFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "在资源管理器中显示以 . 开头的文件和文件夹。"
+        },
+        "customResourceExplorer.fontWeight": {
+          "type": "string",
+          "default": "400",
+          "enum": [
+            "400",
+            "500",
+            "600",
+            "bold"
+          ],
+          "enumDescriptions": [
+            "常规",
+            "中等",
+            "半粗",
+            "粗体"
+          ],
+          "description": "PROJECT 文件树的字体粗细。"
+        }
+      }
+    },
+    "viewsWelcome": [
+      {
+        "view": "customResourceExplorer",
+        "contents": "尚未打开文件夹。\n[打开文件夹](command:vscode.openFolder)"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "build:webview": "esbuild webview-ui/src/main.tsx --bundle --outfile=media/webview.js --format=iife --platform=browser --jsx=automatic --minify",
+    "check:webview": "tsc -p tsconfig.webview.json --noEmit",
+    "compile": "npm run build:webview && npm run check:webview && tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "ignore": "^7.0.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.4.0"
+  }
+}

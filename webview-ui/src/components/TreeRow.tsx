@@ -1,0 +1,40 @@
+import { MouseEvent, useState } from 'react';
+import { FaChevronDown, FaChevronRight } from 'react-icons/fa6';
+import { ResourceNode } from '../types';
+import { buildTargetBorderColor, isLanguageSourceRoot } from '../tree-utils';
+import { ResourceIcon } from './ResourceIcon';
+
+type Props = {
+  node: ResourceNode;
+  label?: string;
+  depth: number;
+  selected: boolean;
+  root?: boolean;
+  onSelect: (node: ResourceNode) => void;
+  onOpen: (node: ResourceNode) => void;
+  onContextMenu: (event: MouseEvent, node: ResourceNode) => void;
+};
+
+export function TreeRow({ node, label = node.name, depth, selected, root = false, onSelect, onOpen, onContextMenu }: Props) {
+  const [hovered, setHovered] = useState(false);
+  const buildTarget = node.isBuildTargetDirectory && !selected;
+  const muted = node.isGitIgnored && !selected && !buildTarget;
+  const color = selected
+    ? 'var(--vscode-list-activeSelectionForeground)'
+    : muted ? 'var(--vscode-disabledForeground, #8c8c8c)'
+    : buildTarget ? buildTargetBorderColor : undefined;
+  const background = selected ? 'var(--vscode-list-activeSelectionBackground)' : hovered ? 'var(--vscode-list-hoverBackground)' : undefined;
+  return (
+    <div
+      style={{ minWidth: 0, minHeight: root ? undefined : 22, height: root ? '100%' : undefined, flex: root ? 1 : undefined, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: root ? 0 : 8 + depth * 16, paddingRight: root ? 0 : 8, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: isLanguageSourceRoot(node) ? 700 : undefined, color, background }}
+      role="treeitem" tabIndex={0} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      onClick={() => onSelect(node)} onDoubleClick={() => !node.isDirectory && onOpen(node)} onContextMenu={(event) => onContextMenu(event, node)}
+    >
+      <span aria-hidden="true" style={{ width: 15, flex: '0 0 15px', color: muted || buildTarget ? 'currentColor' : 'var(--vscode-icon-foreground)', fontWeight: 400, textAlign: 'center', lineHeight: 0 }}>
+        {node.isDirectory && (node.open ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />)}
+      </span>
+      <ResourceIcon node={node} muted={muted || buildTarget} buildTarget={buildTarget} />
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+    </div>
+  );
+}
