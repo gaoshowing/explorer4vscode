@@ -1,22 +1,24 @@
 import { ResourceNode } from './types';
 
-export const solidFolderColor = '#c8c8c8';
-export const highlightedFolderColor = '#a9a9a9';
-export const buildTargetBorderColor = 'var(--vscode-terminal-ansiBrightYellow, #d7ba7d)';
-export const buildTargetFillColor = '#f5e7bf';
+export const solidFolderColor = 'var(--project-folder-fill)';
+export const solidFolderOutlineColor = 'var(--project-folder-outline)';
+export const highlightedFolderColor = 'var(--project-source-folder-fill)';
+export const highlightedFolderOutlineColor = 'var(--project-source-folder-outline)';
+export const buildTargetBorderColor = 'var(--project-build-folder-outline)';
+export const buildTargetFillColor = 'var(--project-build-folder-fill)';
 
 export const iconColors: Record<string, string> = {
-  js: '#f7df1e',
-  ts: '#3178c6',
-  html: '#e44d26',
-  css: '#42a5f5',
-  json: '#c2a568',
-  md: '#61aeee',
-  rust: '#dea584',
-  java: '#e76f00',
-  gradle: '#23a6b6',
-  yaml: '#cb171e',
-  image: '#c586c0',
+  js: 'var(--project-icon-js)',
+  ts: 'var(--project-icon-ts)',
+  html: 'var(--project-icon-html)',
+  css: 'var(--project-icon-css)',
+  json: 'var(--project-icon-json)',
+  md: 'var(--project-icon-md)',
+  rust: 'var(--project-icon-rust)',
+  java: 'var(--project-icon-java)',
+  gradle: 'var(--project-icon-gradle)',
+  yaml: 'var(--project-icon-yaml)',
+  image: 'var(--project-icon-image)',
 };
 
 export function iconKind(node: ResourceNode): string {

@@ -17,11 +17,12 @@ type Props = {
 
 export function TreeRow({ node, label = node.name, depth, selected, root = false, onSelect, onOpen, onContextMenu }: Props) {
   const [hovered, setHovered] = useState(false);
-  const buildTarget = node.isBuildTargetDirectory && !selected;
+  const buildTarget = node.isBuildTargetDirectory;
   const muted = node.isGitIgnored && !selected && !buildTarget;
+  const highlighted = selected || hovered;
   const color = selected
-    ? 'var(--vscode-list-activeSelectionForeground)'
-    : muted ? 'var(--vscode-disabledForeground, #8c8c8c)'
+    ? buildTarget ? buildTargetBorderColor : 'var(--vscode-list-activeSelectionForeground)'
+    : muted ? 'var(--vscode-disabledForeground)'
     : buildTarget ? buildTargetBorderColor : undefined;
   const background = selected ? 'var(--vscode-list-activeSelectionBackground)' : hovered ? 'var(--vscode-list-hoverBackground)' : undefined;
   return (
@@ -31,7 +32,7 @@ export function TreeRow({ node, label = node.name, depth, selected, root = false
         customResourceExplorerIsDirectory: node.isDirectory,
         customResourceExplorerIsWorkspaceRoot: node.isWorkspaceRoot,
       })}
-      style={{ minWidth: 0, minHeight: root ? undefined : 22, height: root ? '100%' : undefined, flex: root ? 1 : undefined, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: root ? 0 : depth * 14, paddingRight: root ? 0 : 0, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: isLanguageSourceRoot(node) ? 700 : undefined, color, background }}
+      style={{ minWidth: 0, minHeight: root ? undefined : 22, height: root ? '100%' : undefined, flex: root ? 1 : undefined, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: root ? 0 : depth === 0 ? 4 : depth * 14, paddingRight: root ? 0 : 0, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: isLanguageSourceRoot(node) ? 700 : undefined, color, background, borderRadius: highlighted ? 4 : undefined }}
       role="treeitem" tabIndex={0} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       onClick={() => onSelect(node)} onDoubleClick={() => !node.isDirectory && onOpen(node)} onContextMenu={(event) => onContextMenu(event, node)}
     >

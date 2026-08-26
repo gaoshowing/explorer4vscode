@@ -1,5 +1,32 @@
 :root {
   color-scheme: light dark;
+  --project-folder-fill: color-mix(in srgb, var(--vscode-icon-foreground) 35%, var(--vscode-sideBar-background));
+  --project-folder-outline: var(--vscode-descriptionForeground);
+  --project-source-folder-fill: color-mix(in srgb, var(--vscode-icon-foreground) 50%, var(--vscode-sideBar-background));
+  --project-source-folder-outline: var(--vscode-foreground);
+  --project-build-folder-accent: var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+  --project-build-folder-fill: color-mix(in srgb, var(--project-build-folder-accent) 42%, var(--vscode-sideBar-background));
+  --project-build-folder-outline: var(--project-build-folder-accent);
+  --project-icon-js: color-mix(in srgb, #f7df1e 82%, var(--vscode-foreground));
+  --project-icon-ts: color-mix(in srgb, #3178c6 82%, var(--vscode-foreground));
+  --project-icon-html: color-mix(in srgb, #e44d26 82%, var(--vscode-foreground));
+  --project-icon-css: color-mix(in srgb, #42a5f5 82%, var(--vscode-foreground));
+  --project-icon-json: color-mix(in srgb, #c2a568 82%, var(--vscode-foreground));
+  --project-icon-md: color-mix(in srgb, #61aeee 82%, var(--vscode-foreground));
+  --project-icon-rust: color-mix(in srgb, #dea584 82%, var(--vscode-foreground));
+  --project-icon-java: color-mix(in srgb, #e76f00 82%, var(--vscode-foreground));
+  --project-icon-gradle: color-mix(in srgb, #23a6b6 82%, var(--vscode-foreground));
+  --project-icon-yaml: color-mix(in srgb, #cb171e 82%, var(--vscode-foreground));
+  --project-icon-image: color-mix(in srgb, #c586c0 82%, var(--vscode-foreground));
+}
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --project-folder-fill: var(--vscode-sideBar-background);
+  --project-folder-outline: var(--vscode-icon-foreground);
+  --project-source-folder-fill: var(--vscode-sideBar-background);
+  --project-source-folder-outline: var(--vscode-icon-foreground);
+  --project-build-folder-fill: var(--vscode-sideBar-background);
+  --project-build-folder-outline: var(--project-build-folder-accent);
 }
 * {
   box-sizing: border-box;

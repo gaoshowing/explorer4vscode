@@ -6,7 +6,7 @@ import { SiGradle, SiHtml5, SiJavascript, SiJson, SiMarkdown, SiRust, SiTypescri
 import { MdOutlineSettingsEthernet } from 'react-icons/md';
 import { VscFile, VscFileMedia } from 'react-icons/vsc';
 import { ResourceNode } from '../types';
-import { buildTargetBorderColor, buildTargetFillColor, highlightedFolderColor, iconColors, iconKind, isLanguageSourceRoot, solidFolderColor } from '../tree-utils';
+import { buildTargetBorderColor, buildTargetFillColor, highlightedFolderColor, highlightedFolderOutlineColor, iconColors, iconKind, isLanguageSourceRoot, solidFolderColor, solidFolderOutlineColor } from '../tree-utils';
 
 export function ResourceIcon({ node, muted, buildTarget = false }: { node: ResourceNode; muted: boolean; buildTarget?: boolean }) {
   const kind = iconKind(node);
@@ -29,7 +29,7 @@ export function ResourceIcon({ node, muted, buildTarget = false }: { node: Resou
   const renderedIcon = node.isDirectory && (!node.isGitIgnored || buildTarget)
     ? cloneElement(icon, {
       style: {
-        stroke: buildTarget ? buildTargetBorderColor : isHighlightedFolder ? '#4a4a4a' : '#858585',
+        stroke: buildTarget ? buildTargetBorderColor : isHighlightedFolder ? highlightedFolderOutlineColor : solidFolderOutlineColor,
         strokeWidth: 42,
         strokeLinejoin: 'round',
         paintOrder: 'fill stroke',
