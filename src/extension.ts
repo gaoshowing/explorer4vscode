@@ -17,7 +17,7 @@ type ResourceNode = {
 };
 
 type Message = {
-  command: 'ready' | 'loadChildren' | 'open' | 'newFile' | 'newFolder' | 'rename' | 'delete' | 'refresh';
+  command: 'ready' | 'loadChildren' | 'setContext' | 'open' | 'newFile' | 'newFolder' | 'rename' | 'delete' | 'refresh';
   uri?: string;
 };
 
@@ -41,6 +41,7 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private languageSourceRoots = new Set<string>();
   private readonly rustModuleDirectoryCache = new Map<string, boolean>();
   private readonly gitignoreMatchers = new Map<string, Promise<ReturnType<typeof ignore>>>();
+  private contextUri: vscode.Uri | undefined;
   private rustCargoSourceRoots = new Set<string>();
   private buildTargetDirectories = new Set<string>();
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -122,6 +123,10 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     await this.sendChildren(uri);
   }
 
+  getContextUri(): vscode.Uri | undefined {
+    return this.contextUri;
+  }
+
   async refreshLanguageSourceRoots(): Promise<void> {
     const javaLanguageServerReady = await this.activateJavaTooling();
     const [javaLanguageServerRoots, javaConventionRoots, rustCargoInfo, javaBuildTargetDirectories] = await Promise.all([
@@ -161,6 +166,10 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     if (message.command === 'loadChildren' && message.uri) {
       const uri = getWorkspaceUri(message.uri);
       if (uri) await this.sendChildren(uri);
+      return;
+    }
+    if (message.command === 'setContext') {
+      this.contextUri = getWorkspaceUri(message.uri);
       return;
     }
     await this.onCommand(message);
@@ -656,6 +665,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('customResourceExplorer.refresh', () => provider.sendRoots()),
     vscode.commands.registerCommand('customResourceExplorer.newFile', () => createResource('file')),
     vscode.commands.registerCommand('customResourceExplorer.newFolder', () => createResource('folder')),
+    vscode.commands.registerCommand('customResourceExplorer.newFileContext', () => createResource('file', provider.getContextUri()?.toString())),
+    vscode.commands.registerCommand('customResourceExplorer.newFolderContext', () => createResource('folder', provider.getContextUri()?.toString())),
+    vscode.commands.registerCommand('customResourceExplorer.openContext', () => execute({ command: 'open', uri: provider.getContextUri()?.toString() })),
+    vscode.commands.registerCommand('customResourceExplorer.renameContext', () => execute({ command: 'rename', uri: provider.getContextUri()?.toString() })),
+    vscode.commands.registerCommand('customResourceExplorer.deleteContext', () => execute({ command: 'delete', uri: provider.getContextUri()?.toString() })),
     vscode.commands.registerCommand('customResourceExplorer.refreshLanguageRoots', () => provider.refreshLanguageSourceRoots()),
     vscode.commands.registerCommand('customResourceExplorer.showLanguageRootLog', () => output.show(true)),
   );
@@ -664,9 +678,10 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {}
 
 function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
-  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'));
-  const nonce = String(Date.now());
+  const resourceVersion = String(Date.now());
+  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js')).with({ query: 'v=' + resourceVersion });
+  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.css')).with({ query: 'v=' + resourceVersion });
+  const nonce = resourceVersion;
   return [
     '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">',
     '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src ' + webview.cspSource + '; font-src ' + webview.cspSource + '; script-src \'nonce-' + nonce + '\';">',

@@ -26,7 +26,12 @@ export function TreeRow({ node, label = node.name, depth, selected, root = false
   const background = selected ? 'var(--vscode-list-activeSelectionBackground)' : hovered ? 'var(--vscode-list-hoverBackground)' : undefined;
   return (
     <div
-      style={{ minWidth: 0, minHeight: root ? undefined : 22, height: root ? '100%' : undefined, flex: root ? 1 : undefined, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: root ? 0 : 8 + depth * 16, paddingRight: root ? 0 : 8, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: isLanguageSourceRoot(node) ? 700 : undefined, color, background }}
+      data-vscode-context={JSON.stringify({
+        webviewSection: node.isDirectory ? 'projectDirectory' : 'projectFile',
+        customResourceExplorerIsDirectory: node.isDirectory,
+        customResourceExplorerIsWorkspaceRoot: node.isWorkspaceRoot,
+      })}
+      style={{ minWidth: 0, minHeight: root ? undefined : 22, height: root ? '100%' : undefined, flex: root ? 1 : undefined, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: root ? 0 : depth * 14, paddingRight: root ? 0 : 0, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: isLanguageSourceRoot(node) ? 700 : undefined, color, background }}
       role="treeitem" tabIndex={0} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       onClick={() => onSelect(node)} onDoubleClick={() => !node.isDirectory && onOpen(node)} onContextMenu={(event) => onContextMenu(event, node)}
     >

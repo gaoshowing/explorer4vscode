@@ -43,6 +43,28 @@
         "icon": "$(new-folder)"
       },
       {
+        "command": "customResourceExplorer.newFileContext",
+        "title": "新建文件",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "customResourceExplorer.newFolderContext",
+        "title": "新建文件夹",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "customResourceExplorer.openContext",
+        "title": "打开"
+      },
+      {
+        "command": "customResourceExplorer.renameContext",
+        "title": "重命名"
+      },
+      {
+        "command": "customResourceExplorer.deleteContext",
+        "title": "删除"
+      },
+      {
         "command": "customResourceExplorer.refreshLanguageRoots",
         "title": "PROJECT：刷新语言源目录"
       },
@@ -51,6 +73,35 @@
         "title": "PROJECT：显示语言源目录日志"
       }
     ],
+    "menus": {
+      "webview/context": [
+        {
+          "command": "customResourceExplorer.newFileContext",
+          "when": "webviewId == customResourceExplorer && customResourceExplorerIsDirectory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "customResourceExplorer.newFolderContext",
+          "when": "webviewId == customResourceExplorer && customResourceExplorerIsDirectory",
+          "group": "navigation@2"
+        },
+        {
+          "command": "customResourceExplorer.openContext",
+          "when": "webviewId == customResourceExplorer && customResourceExplorerIsDirectory == false",
+          "group": "navigation@3"
+        },
+        {
+          "command": "customResourceExplorer.renameContext",
+          "when": "webviewId == customResourceExplorer && customResourceExplorerIsWorkspaceRoot == false",
+          "group": "2_workspace@1"
+        },
+        {
+          "command": "customResourceExplorer.deleteContext",
+          "when": "webviewId == customResourceExplorer && customResourceExplorerIsWorkspaceRoot == false",
+          "group": "2_workspace@2"
+        }
+      ]
+    },
     "configuration": {
       "title": "自定义资源管理器",
       "properties": {

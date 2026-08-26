@@ -18,5 +18,3 @@ export type IncomingMessage =
   | { type: 'children'; parent: string; children: Omit<ResourceNode, 'open' | 'loaded' | 'children'>[] }
   | { type: 'fontWeight'; fontWeight: string }
   | { type: 'languageRoots'; roots: string[]; rustCargoRoots: string[]; buildTargetDirectories: string[] };
-
-export type ContextMenuState = { node: ResourceNode; x: number; y: number };

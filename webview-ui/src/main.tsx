@@ -1,10 +1,9 @@
 import { CSSProperties, MouseEvent, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { VscCollapseAll, VscNewFile, VscNewFolder, VscRefresh } from 'react-icons/vsc';
-import { ContextMenu } from './components/ContextMenu';
 import { IconButton } from './components/IconButton';
 import { TreeRow } from './components/TreeRow';
-import { ContextMenuState, IncomingMessage, ResourceNode } from './types';
+import { IncomingMessage, ResourceNode } from './types';
 import './styles.css';
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -15,7 +14,6 @@ function App() {
   const [roots, setRoots] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
   const [fontWeight, setFontWeight] = useState('400');
-  const [menu, setMenu] = useState<ContextMenuState>();
 
   useEffect(() => {
     const receive = (event: MessageEvent<IncomingMessage>) => {
@@ -78,14 +76,10 @@ function App() {
   };
   const openNode = (node: ResourceNode) => vscode.postMessage({ command: 'open', uri: node.uri });
   const showMenu = (event: MouseEvent, node: ResourceNode) => {
-    event.preventDefault();
     setSelected(node.uri);
-    setMenu({ node, x: event.clientX, y: event.clientY });
+    vscode.postMessage({ command: 'setContext', uri: node.uri });
   };
-  const run = (command: string, uri?: string) => {
-    setMenu(undefined);
-    vscode.postMessage({ command, uri });
-  };
+  const run = (command: string, uri?: string) => vscode.postMessage({ command, uri });
   const renderNode = (uri: string, depth: number): JSX.Element | null => {
     const node = nodes[uri];
     if (!node) return null;
@@ -98,14 +92,12 @@ function App() {
     );
   };
 
-  const contextActions = menu?.node.isDirectory ? [['newFile', '新建文件'], ['newFolder', '新建文件夹']] : [['open', '打开']];
-  if (menu && !menu.node.isWorkspaceRoot) contextActions.push(['rename', '重命名'], ['delete', '删除']);
   const singleRoot = roots.length === 1 ? nodes[roots[0]] : undefined;
   const rootStyle: CSSProperties = { width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', fontWeight };
 
   return (
-    <div style={rootStyle} onClick={() => menu && setMenu(undefined)}>
-      <header aria-label="PROJECT 工具栏" style={{ height: 35, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, padding: '0 7px', borderBottom: '1px solid var(--vscode-sideBarSectionHeader-border)' }}>
+    <div style={rootStyle}>
+      <header aria-label="PROJECT 工具栏" style={{ height: 35, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, padding: 0, borderBottom: '1px solid var(--vscode-sideBarSectionHeader-border)' }}>
         {singleRoot && <TreeRow node={singleRoot} depth={0} root selected={selected === singleRoot.uri} onSelect={selectNode} onOpen={openNode} onContextMenu={showMenu} />}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <IconButton title="新建文件" onClick={() => run('newFile', selected || undefined)}><VscNewFile size={17} /></IconButton>
@@ -114,13 +106,12 @@ function App() {
           <IconButton title="全部折叠" onClick={() => setNodes(previous => Object.fromEntries(Object.entries(previous).map(([uri, node]) => [uri, node.isWorkspaceRoot ? node : { ...node, open: false }])))}><VscCollapseAll size={17} /></IconButton>
         </div>
       </header>
-      <main role="tree" style={{ height: 'calc(100vh - 35px)', overflow: 'auto', padding: '3px 0' }}>
+      <main role="tree" style={{ height: 'calc(100vh - 35px)', overflow: 'auto', padding: 0 }}>
         {roots.length ? roots.map(uri => {
           const root = nodes[uri];
-          return singleRoot?.uri === uri ? root.open ? root.children.map(child => renderNode(child, 1)) : null : renderNode(uri, 0);
+          return singleRoot?.uri === uri ? root.open ? root.children.map(child => renderNode(child, 0)) : null : renderNode(uri, 0);
         }) : <div style={{ padding: 18, color: 'var(--vscode-descriptionForeground)', fontWeight: 400 }}>尚未打开文件夹。</div>}
       </main>
-      {menu && <ContextMenu menu={menu} actions={contextActions} onRun={command => run(command, menu.node.uri)} />}
     </div>
   );
 }
