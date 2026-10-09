@@ -6,11 +6,11 @@ import { SiGradle, SiHtml5, SiJavascript, SiJson, SiMarkdown, SiRust, SiTypescri
 import { MdOutlineSettingsEthernet } from 'react-icons/md';
 import { VscFile, VscFileMedia } from 'react-icons/vsc';
 import { ResourceNode } from '../types';
-import { buildTargetBorderColor, buildTargetFillColor, highlightedFolderColor, highlightedFolderOutlineColor, iconColors, iconKind, isLanguageSourceRoot, solidFolderColor, solidFolderOutlineColor } from '../tree-utils';
+import { buildTargetBorderColor, buildTargetFillColor, highlightedFolderColor, highlightedFolderOutlineColor, iconColors, iconKind, isHighlightedDirectory, solidFolderColor, solidFolderOutlineColor } from '../tree-utils';
 
 export function ResourceIcon({ node, muted, buildTarget = false }: { node: ResourceNode; muted: boolean; buildTarget?: boolean }) {
   const kind = iconKind(node);
-  const isHighlightedFolder = node.isDirectory && isLanguageSourceRoot(node);
+  const isHighlightedFolder = node.isDirectory && isHighlightedDirectory(node);
   let icon: JSX.Element;
   if (node.isDirectory) {
     icon = <FaFolder />;

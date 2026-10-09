@@ -31,6 +31,6 @@ export function iconKind(node: ResourceNode): string {
   return types[extension] ?? 'file';
 }
 
-export function isLanguageSourceRoot(node: ResourceNode): boolean {
-  return node.isJavaSourceRoot || node.isRustModuleDirectory || node.isRustCargoSourceRoot;
+export function isHighlightedDirectory(node: ResourceNode): boolean {
+  return node.isJavaSourceRoot || node.isJavaPackageDirectory || node.isProjectDescriptorDirectory || node.isRustModuleDirectory || node.isRustCargoSourceRoot;
 }

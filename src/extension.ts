@@ -31,6 +31,11 @@ type RustCargoInfo = {
   buildTargetDirectories: Set<string>;
 };
 
+type JavaSourceInfo = {
+  sourceRoots: Set<string>;
+  highlightedDirectories: Set<string>;
+};
+
 const execFileAsync = promisify(execFile);
 
 class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -39,6 +44,11 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private readonly disposables: vscode.Disposable[] = [];
   private readonly pendingFolders = new Set<string>();
   private languageSourceRoots = new Set<string>();
+  private javaPackageSourceRoots = new Set<string>();
+  private javaPackageDirectories = new Set<string>();
+  private readonly javaPackageDirectoryCache = new Map<string, Promise<Set<string>>>();
+  private projectDescriptorDirectories = new Set<string>();
+  private projectDescriptorDirectoryCache: Promise<Set<string>> | undefined;
   private readonly rustModuleDirectoryCache = new Map<string, boolean>();
   private readonly gitignoreMatchers = new Map<string, Promise<ReturnType<typeof ignore>>>();
   private contextUri: vscode.Uri | undefined;
@@ -56,14 +66,15 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     this.disposables.push(
       watcher,
-      watcher.onDidCreate(uri => this.handleFileSystemChange(uri)),
-      watcher.onDidDelete(uri => this.handleFileSystemChange(uri)),
+      watcher.onDidCreate(uri => this.handleFileSystemChange(uri, true)),
+      watcher.onDidDelete(uri => this.handleFileSystemChange(uri, true)),
       watcher.onDidChange(uri => {
         if (uri.path.split('/').pop() === '.gitignore') {
           this.gitignoreMatchers.clear();
           this.scheduleFolderRefresh(parentUri(uri));
         }
-        if (isProjectModelFile(uri)) this.scheduleLanguageRootsRefresh();
+        if (isProjectModelFile(uri)) this.invalidateProjectDescriptorDirectories();
+        this.handleJavaPackageChange(uri, false);
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this.gitignoreMatchers.clear();
@@ -107,6 +118,8 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       isDirectory: true,
       isWorkspaceRoot: true,
       isJavaSourceRoot: this.isJavaSourceRoot(folder.uri),
+      isJavaPackageDirectory: this.isJavaPackageDirectory(folder.uri),
+      isProjectDescriptorDirectory: this.isProjectDescriptorDirectory(folder.uri),
       isRustModuleDirectory: false,
       isRustCargoSourceRoot: this.isRustCargoSourceRoot(folder.uri),
       isBuildTargetDirectory: this.isBuildTargetDirectory(folder.uri),
@@ -129,22 +142,36 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
   async refreshLanguageSourceRoots(): Promise<void> {
     const javaLanguageServerReady = await this.activateJavaTooling();
-    const [javaLanguageServerRoots, javaConventionRoots, rustCargoInfo, javaBuildTargetDirectories] = await Promise.all([
-      javaLanguageServerReady ? discoverJavaSourceRoots(this.output) : Promise.resolve(new Set<string>()),
+    const [javaLanguageServerInfo, javaConventionInfo, rustCargoInfo, javaBuildTargetDirectories, projectDescriptorDirectories] = await Promise.all([
+      javaLanguageServerReady ? discoverJavaSourceRoots(this.output) : Promise.resolve(emptyJavaSourceInfo()),
       discoverJavaConventionRoots(this.output),
       discoverRustCargoInfo(this.output),
       discoverJavaBuildTargetDirectories(this.output),
+      this.getProjectDescriptorDirectories(),
     ]);
-    const javaRoots = new Set([...javaLanguageServerRoots, ...javaConventionRoots]);
+    const javaRoots = new Set([
+      ...javaLanguageServerInfo.highlightedDirectories,
+      ...javaConventionInfo.highlightedDirectories,
+    ]);
+    const javaPackageSourceRoots = new Set([
+      ...javaLanguageServerInfo.sourceRoots,
+      ...javaConventionInfo.sourceRoots,
+    ]);
+    const javaPackageDirectories = await this.getJavaPackageDirectories(javaPackageSourceRoots);
     this.languageSourceRoots = javaRoots;
+    this.javaPackageSourceRoots = javaPackageSourceRoots;
+    this.javaPackageDirectories = javaPackageDirectories;
+    this.projectDescriptorDirectories = projectDescriptorDirectories;
     this.rustCargoSourceRoots = rustCargoInfo.sourceRoots;
     this.buildTargetDirectories = new Set([...rustCargoInfo.buildTargetDirectories, ...javaBuildTargetDirectories]);
     this.output.appendLine(
-      '[PROJECT] Identified ' + javaRoots.size + ' Java source, ' + rustCargoInfo.sourceRoots.size + ' Cargo source, and ' + this.buildTargetDirectories.size + ' build target directorie(s).',
+      '[PROJECT] Identified ' + javaRoots.size + ' Java source, ' + javaPackageDirectories.size + ' Java package, ' + rustCargoInfo.sourceRoots.size + ' Cargo source, and ' + this.buildTargetDirectories.size + ' build target directorie(s).',
     );
     this.post({
       type: 'languageRoots',
       roots: [...javaRoots],
+      javaPackageDirectories: [...javaPackageDirectories],
+      projectDescriptorDirectories: [...projectDescriptorDirectories],
       rustCargoRoots: [...rustCargoInfo.sourceRoots],
       buildTargetDirectories: [...this.buildTargetDirectories],
     });
@@ -193,6 +220,8 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
             isDirectory,
             isWorkspaceRoot: false,
             isJavaSourceRoot: this.isJavaSourceRoot(childUri),
+            isJavaPackageDirectory: this.isJavaPackageDirectory(childUri),
+            isProjectDescriptorDirectory: this.isProjectDescriptorDirectory(childUri),
             isRustModuleDirectory,
             isRustCargoSourceRoot: isDirectory && !isRustModuleDirectory && this.isRustCargoSourceRoot(childUri),
             isBuildTargetDirectory: isDirectory && this.isBuildTargetDirectory(childUri),
@@ -204,6 +233,9 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
           : a.isDirectory ? -1 : 1);
       this.post({ type: 'children', parent: uri.toString(), children });
     } catch (error) {
+      // A watched folder may be deleted (e.g. build cleanup) between the file event and the
+      // debounced refresh; the parent refresh drops the stale node, so this needs no warning.
+      if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') return;
       void vscode.window.showWarningMessage('无法读取资源：' + errorMessage(error));
     }
   }
@@ -221,11 +253,12 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     }, 150);
   }
 
-  private handleFileSystemChange(uri: vscode.Uri): void {
+  private handleFileSystemChange(uri: vscode.Uri, isCreateOrDelete = false): void {
     this.rustModuleDirectoryCache.clear();
     if (uri.path.split('/').pop() === '.gitignore') this.gitignoreMatchers.clear();
     this.scheduleFolderRefresh(parentUri(uri));
-    if (isProjectModelFile(uri)) this.scheduleLanguageRootsRefresh();
+    if (isProjectModelFile(uri)) this.invalidateProjectDescriptorDirectories();
+    this.handleJavaPackageChange(uri, isCreateOrDelete);
   }
 
   private scheduleLanguageRootsRefresh(delay = 800): void {
@@ -235,6 +268,48 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
   private isJavaSourceRoot(uri: vscode.Uri): boolean {
     return this.languageSourceRoots.has(uriKey(uri));
+  }
+
+  private isJavaPackageDirectory(uri: vscode.Uri): boolean {
+    return this.javaPackageDirectories.has(uriKey(uri));
+  }
+
+  private isProjectDescriptorDirectory(uri: vscode.Uri): boolean {
+    return this.projectDescriptorDirectories.has(uriKey(uri));
+  }
+
+  private invalidateProjectDescriptorDirectories(): void {
+    this.projectDescriptorDirectoryCache = undefined;
+    this.scheduleLanguageRootsRefresh();
+  }
+
+  private getProjectDescriptorDirectories(): Promise<Set<string>> {
+    this.projectDescriptorDirectoryCache ??= discoverProjectDescriptorDirectories(this.output);
+    return this.projectDescriptorDirectoryCache;
+  }
+
+  private handleJavaPackageChange(uri: vscode.Uri, isCreateOrDelete: boolean): void {
+    if (!isCreateOrDelete && !uri.path.endsWith('.java')) return;
+    const root = [...this.javaPackageSourceRoots].find(value => isUriInside(uri, getWorkspaceUri(value)));
+    if (!root) return;
+    this.javaPackageDirectoryCache.delete(root);
+    this.scheduleLanguageRootsRefresh(300);
+  }
+
+  private async getJavaPackageDirectories(sourceRoots: Set<string>): Promise<Set<string>> {
+    for (const cachedRoot of this.javaPackageDirectoryCache.keys()) {
+      if (!sourceRoots.has(cachedRoot)) this.javaPackageDirectoryCache.delete(cachedRoot);
+    }
+    const packages = await Promise.all([...sourceRoots].map(async sourceRoot => {
+      let scan = this.javaPackageDirectoryCache.get(sourceRoot);
+      if (!scan) {
+        const uri = getWorkspaceUri(sourceRoot);
+        scan = uri ? discoverJavaPackageDirectories(uri, this.output) : Promise.resolve(new Set<string>());
+        this.javaPackageDirectoryCache.set(sourceRoot, scan);
+      }
+      return scan;
+    }));
+    return new Set(packages.flatMap(paths => [...paths]));
   }
 
   private async activateJavaTooling(): Promise<boolean> {
@@ -336,8 +411,8 @@ class ProjectViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 }
 
 function isProjectModelFile(uri: vscode.Uri): boolean {
-  const name = uri.path.split('/').pop();
-  return name === 'Cargo.toml' || name === 'build.gradle' || name === 'build.gradle.kts' || name === 'pom.xml';
+  const name = uri.path.split('/').pop()?.toLowerCase() ?? '';
+  return name.endsWith('.toml') || name.endsWith('.gradle') || name.endsWith('.gradle.kts') || name === 'pom.xml';
 }
 
 function uriKey(uri: vscode.Uri): string {
@@ -352,6 +427,12 @@ function workspaceRelativePath(workspaceRoot: vscode.Uri, uri: vscode.Uri): stri
   return targetPath.slice(rootPath.length + 1);
 }
 
+function isUriInside(uri: vscode.Uri, parent: vscode.Uri | undefined): boolean {
+  if (!parent || uri.scheme !== parent.scheme) return false;
+  const parentPath = parent.path.replace(/\/+$/, '');
+  return uri.path === parentPath || uri.path.startsWith(parentPath + '/');
+}
+
 function scopeGitignorePattern(pattern: string, basePath: string): string {
   if (!basePath || !pattern || pattern.startsWith('#') || pattern.startsWith('\\#') || pattern.startsWith('\\!')) {
     return pattern;
@@ -363,14 +444,18 @@ function scopeGitignorePattern(pattern: string, basePath: string): string {
   return (negated ? '!' : '') + scoped;
 }
 
-async function discoverJavaSourceRoots(output: vscode.OutputChannel): Promise<Set<string>> {
-  const roots = new Set<string>();
-  await addJavaSourceRoots(roots, output);
-  return roots;
+function emptyJavaSourceInfo(): JavaSourceInfo {
+  return { sourceRoots: new Set<string>(), highlightedDirectories: new Set<string>() };
 }
 
-async function discoverJavaConventionRoots(output: vscode.OutputChannel): Promise<Set<string>> {
-  const roots = new Set<string>();
+async function discoverJavaSourceRoots(output: vscode.OutputChannel): Promise<JavaSourceInfo> {
+  const info = emptyJavaSourceInfo();
+  await addJavaSourceRoots(info, output);
+  return info;
+}
+
+async function discoverJavaConventionRoots(output: vscode.OutputChannel): Promise<JavaSourceInfo> {
+  const info = emptyJavaSourceInfo();
   try {
     const buildFiles = await vscode.workspace.findFiles(
       '**/{pom.xml,build.gradle,build.gradle.kts}',
@@ -385,17 +470,17 @@ async function discoverJavaConventionRoots(output: vscode.OutputChannel): Promis
       ];
       const sourceSets = await Promise.all(candidates.map(uri => isDirectory(uri)));
       if (sourceSets.some(Boolean)) {
-        roots.add(uriKey(sourceContainer));
+        info.highlightedDirectories.add(uriKey(sourceContainer));
         candidates.forEach((uri, index) => {
-          if (sourceSets[index]) addJavaSourceRootWithContainers(roots, uri);
+          if (sourceSets[index]) addJavaSourceRootWithContainers(info, uri);
         });
       }
     }
-    output.appendLine('[Java] Standard Maven/Gradle layout added ' + roots.size + ' source directorie(s).');
+    output.appendLine('[Java] Standard Maven/Gradle layout added ' + info.highlightedDirectories.size + ' source directorie(s).');
   } catch (error) {
     output.appendLine('[Java] Standard source layout discovery unavailable: ' + errorMessage(error));
   }
-  return roots;
+  return info;
 }
 
 async function isDirectory(uri: vscode.Uri): Promise<boolean> {
@@ -466,11 +551,11 @@ async function discoverJavaBuildTargetDirectories(output: vscode.OutputChannel):
   return roots;
 }
 
-async function addJavaSourceRoots(roots: Set<string>, output: vscode.OutputChannel): Promise<void> {
+async function addJavaSourceRoots(info: JavaSourceInfo, output: vscode.OutputChannel): Promise<void> {
   try {
     await vscode.extensions.getExtension('redhat.java')?.activate();
     const listedPaths = toUris(await vscode.commands.executeCommand<unknown>('java.project.listSourcePaths'));
-    for (const uri of listedPaths) addJavaSourceRootWithContainers(roots, uri);
+    for (const uri of listedPaths) addJavaSourceRootWithContainers(info, uri);
     output.appendLine('[Java] listSourcePaths returned ' + listedPaths.length + ' source path(s).');
     output.appendLine('[Java] listSourcePaths: ' + formatUris(listedPaths));
 
@@ -486,7 +571,7 @@ async function addJavaSourceRoots(roots: Set<string>, output: vscode.OutputChann
         ['org.eclipse.jdt.ls.core.sourcePaths'],
       );
       const sourcePaths = toUris(javaSettingValue(settings, 'org.eclipse.jdt.ls.core.sourcePaths'));
-      for (const uri of sourcePaths) addJavaSourceRootWithContainers(roots, uri);
+      for (const uri of sourcePaths) addJavaSourceRootWithContainers(info, uri);
       settingsPaths += sourcePaths.length;
       output.appendLine('[Java] getSettings ' + uriDisplay(projectUri) + ': ' + formatUris(sourcePaths));
     }
@@ -509,15 +594,52 @@ function uriDisplay(uri: vscode.Uri): string {
   return uri.scheme === 'file' ? uri.fsPath : uri.toString();
 }
 
-function addJavaSourceRootWithContainers(roots: Set<string>, uri: vscode.Uri): void {
-  roots.add(uriKey(uri));
+function addJavaSourceRootWithContainers(info: JavaSourceInfo, uri: vscode.Uri): void {
+  info.sourceRoots.add(uriKey(uri));
+  info.highlightedDirectories.add(uriKey(uri));
   const segments = uri.path.split('/');
   const srcIndex = segments.lastIndexOf('src');
   if (srcIndex < 0 || srcIndex + 2 >= segments.length) return;
   const sourceLanguage = segments[srcIndex + 2];
   if (!['java', 'resources', 'kotlin', 'groovy'].includes(sourceLanguage)) return;
-  roots.add(uriKey(uri.with({ path: segments.slice(0, srcIndex + 1).join('/') || '/' })));
-  roots.add(uriKey(uri.with({ path: segments.slice(0, srcIndex + 2).join('/') })));
+  info.highlightedDirectories.add(uriKey(uri.with({ path: segments.slice(0, srcIndex + 1).join('/') || '/' })));
+  info.highlightedDirectories.add(uriKey(uri.with({ path: segments.slice(0, srcIndex + 2).join('/') })));
+}
+
+async function discoverJavaPackageDirectories(sourceRoot: vscode.Uri, output: vscode.OutputChannel): Promise<Set<string>> {
+  const packages = new Set<string>();
+  try {
+    const javaFiles = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(sourceRoot, '**/*.java'),
+      '**/{.git,node_modules,target,build}/**',
+    );
+    for (const javaFile of javaFiles) {
+      let directory = parentUri(javaFile);
+      while (isUriInside(directory, sourceRoot) && uriKey(directory) !== uriKey(sourceRoot)) {
+        packages.add(uriKey(directory));
+        directory = parentUri(directory);
+      }
+    }
+    output.appendLine('[Java] Scanned ' + javaFiles.length + ' Java file(s) under ' + uriDisplay(sourceRoot) + '; found ' + packages.size + ' package directorie(s).');
+  } catch (error) {
+    output.appendLine('[Java] Package scan unavailable for ' + uriDisplay(sourceRoot) + ': ' + errorMessage(error));
+  }
+  return packages;
+}
+
+async function discoverProjectDescriptorDirectories(output: vscode.OutputChannel): Promise<Set<string>> {
+  const directories = new Set<string>();
+  try {
+    const descriptors = await vscode.workspace.findFiles(
+      '**/*.{toml,gradle,gradle.kts}',
+      '**/{.git,node_modules,target,build}/**',
+    );
+    descriptors.forEach(file => directories.add(uriKey(parentUri(file))));
+    output.appendLine('[PROJECT] Found ' + directories.size + ' directory/directories containing TOML or Gradle descriptor file(s).');
+  } catch (error) {
+    output.appendLine('[PROJECT] Descriptor directory scan unavailable: ' + errorMessage(error));
+  }
+  return directories;
 }
 
 function toUris(value: unknown): vscode.Uri[] {

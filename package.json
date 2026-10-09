@@ -2,7 +2,7 @@
   "name": "custom-resource-explorer",
   "displayName": "Custom Resource Explorer",
   "description": "A VS Code-style workspace resource manager.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -139,8 +139,11 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "build:webview": "esbuild webview-ui/src/main.tsx --bundle --outfile=media/webview.js --format=iife --platform=browser --jsx=automatic --minify",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=out/extension.js --format=cjs --platform=node --external:vscode",
     "check:webview": "tsc -p tsconfig.webview.json --noEmit",
-    "compile": "npm run build:webview && npm run check:webview && tsc -p ./",
+    "check:extension": "tsc -p ./ --noEmit",
+    "compile": "npm run build:webview && npm run check:webview && npm run check:extension && npm run build:extension",
+    "package": "npx --yes @vscode/vsce package --out explorer4vscode.vsix",
     "watch": "tsc -watch -p ./"
   },
   "dependencies": {

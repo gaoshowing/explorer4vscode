@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { VscCollapseAll, VscNewFile, VscNewFolder, VscRefresh } from 'react-icons/vsc';
 import { IconButton } from './components/IconButton';
 import { TreeRow } from './components/TreeRow';
+import { isHighlightedDirectory } from './tree-utils';
 import { IncomingMessage, ResourceNode } from './types';
 import './styles.css';
 
@@ -21,11 +22,15 @@ function App() {
       if (message.type === 'fontWeight') return setFontWeight(message.fontWeight);
       if (message.type === 'languageRoots') {
         const javaRoots = new Set(message.roots);
+        const javaPackageDirectories = new Set(message.javaPackageDirectories);
+        const projectDescriptorDirectories = new Set(message.projectDescriptorDirectories);
         const rustCargoRoots = new Set(message.rustCargoRoots);
         const buildTargetDirectories = new Set(message.buildTargetDirectories);
         return setNodes(previous => Object.fromEntries(Object.entries(previous).map(([uri, node]) => [uri, {
           ...node,
           isJavaSourceRoot: javaRoots.has(uri),
+          isJavaPackageDirectory: javaPackageDirectories.has(uri),
+          isProjectDescriptorDirectory: projectDescriptorDirectories.has(uri),
           isRustCargoSourceRoot: !node.isRustModuleDirectory && rustCargoRoots.has(uri),
           isBuildTargetDirectory: buildTargetDirectories.has(uri),
         }])));
@@ -124,6 +129,7 @@ function compactDirectoryChain(first: ResourceNode, nodes: Record<string, Resour
   while (tail.isDirectory && tail.loaded && tail.open && tail.children.length === 1) {
     const child = nodes[tail.children[0]];
     if (!child?.isDirectory) break;
+    if (isHighlightedDirectory(child)) break;
     names.push(child.name);
     tail = child;
   }
